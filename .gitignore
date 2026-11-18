@@ -1,0 +1,19 @@
+# Segredos
+.env
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Pytest
+.pytest_cache/
+
+# Saída padrão do Agente (apenas na raiz; examples/generated_tests/ é versionado)
+/generated_tests/
+# Hypothesis
+.hypothesis/

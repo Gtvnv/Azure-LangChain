@@ -1,0 +1,24 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest
+      - name: Verificar nomes proibidos
+        if: ${{ env.FORBIDDEN_NAMES != '' }}
+        run: |
+          printf '%s\n' "$FORBIDDEN_NAMES" > "$RUNNER_TEMP/forbidden_names.txt"
+          FORBIDDEN_NAMES_FILE="$RUNNER_TEMP/forbidden_names.txt" python scripts/check_forbidden_names.py
