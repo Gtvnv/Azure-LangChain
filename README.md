@@ -1,4 +1,16 @@
+<div align="center">
+
 # Agente Gerador de Testes pytest
+
+**Transforme código Python em testes `pytest` usando LangChain e Azure OpenAI.**
+
+Python 3.10+ · LangChain · Azure OpenAI · pytest · Hypothesis
+
+[Instalação](#instalação) · [Como executar](#como-executar-o-agente) · [Exemplos](#exemplos-de-uso) · [Segurança](#notas-de-segurança)
+
+</div>
+
+---
 
 ## Descrição do projeto
 
@@ -6,21 +18,39 @@ O Agente Gerador de Testes pytest é uma ferramenta de linha de comando em Pytho
 
 O projeto é pessoal e educacional.
 
+```text
+meu_modulo.py  ──►  python -m pytest_agent  ──►  generated_tests/test_meu_modulo.py
+```
+
 ## Funcionalidades
 
-- Lê o código de um arquivo `.py`, da opção `--snippet` ou da entrada padrão (stdin).
-- Valida a entrada antes de chamar o modelo: arquivo inexistente, entrada vazia, erro de sintaxe e mais de uma fonte de entrada são rejeitados sem custo de API.
-- Gera testes com pelo menos um caso de sucesso e um caso de falha (`pytest.raises`) por função pública.
-- Remove cercas Markdown e texto fora do código da resposta do modelo.
-- Valida o resultado (começa com `import pytest`, é Python válido, contém funções `test_*` e um caso de falha) e pede correção ao modelo em até 2 novas tentativas.
-- Exige que o arquivo gerado importe o módulo alvo e passe em `pytest --collect-only` (veja "Visão geral da arquitetura").
-- Grava o arquivo em `generated_tests/` (ou no diretório escolhido) e pede confirmação antes de sobrescrever.
-- Lê as credenciais do Azure OpenAI de variáveis de ambiente ou de um arquivo `.env`.
-- Mensagens de erro e ajuda em português.
+| Recurso | O que faz |
+|---|---|
+| **Várias fontes de entrada** | Lê um arquivo `.py`, a opção `--snippet` ou a entrada padrão (stdin). |
+| **Validação antes do modelo** | Rejeita arquivo inexistente, entrada vazia, erro de sintaxe e mais de uma fonte, sem custo de API. |
+| **Casos de sucesso e de falha** | Pede ao menos um teste de sucesso e um de falha (`pytest.raises`) por função pública. |
+| **Limpeza da resposta** | Remove cercas Markdown e texto fora do código. |
+| **Validação do resultado** | Começa com `import pytest`, é Python válido, tem funções `test_*` e um caso de falha. Pede correção ao modelo em até 2 novas tentativas. |
+| **Verificação de coleta** | O arquivo gerado precisa importar o módulo alvo e passar em `pytest --collect-only` (veja a arquitetura). |
+| **Gravação segura** | Grava em `generated_tests/` (ou no diretório escolhido) e pede confirmação antes de sobrescrever. |
+| **Credenciais fora do código** | Lê as variáveis do Azure OpenAI do ambiente ou de um arquivo `.env`. |
+| **Interface em português** | Mensagens de erro e ajuda em português. |
 
 ## Visão geral da arquitetura
 
 O fluxo é: CLI, leitura e validação da entrada, carregamento da configuração, geração com o modelo, validação do conteúdo e gravação do arquivo.
+
+```mermaid
+flowchart LR
+    A[Código Python] --> B[CLI]
+    B --> C[Validação da entrada]
+    C --> D[Configuração]
+    D --> E[Azure OpenAI]
+    E --> F{Conteúdo válido?}
+    F -- não, até 2 vezes --> E
+    F -- sim --> G[Coleta com pytest]
+    G --> H[test_nome.py]
+```
 
 | Módulo (`pytest_agent/`) | Responsabilidade |
 |---|---|
@@ -30,11 +60,13 @@ O fluxo é: CLI, leitura e validação da entrada, carregamento da configuraçã
 | `prompt.py` | Construção das mensagens enviadas ao modelo |
 | `llm_client.py` | Chamada ao Azure OpenAI via LangChain (temperatura 0, limite de 60 s) |
 | `validator.py` | Extração do código e validação do arquivo de teste |
+| `collection_check.py` | Verificação de coleta com `pytest --collect-only` |
 | `generator.py` | Laço de geração com até 2 novas tentativas |
 | `writer.py` | Nome do arquivo, confirmação de sobrescrita e gravação |
 | `errors.py` | Erros do domínio com código de saída |
 
-Verificação de coleta: além da validação do conteúdo, os testes gerados devem importar o módulo alvo e passar em `pytest --collect-only`. Essa verificação roda em um subprocesso, com limite de 30 s. Ela executa o código de nível superior do módulo alvo e do arquivo gerado, portanto revise o código antes de usar, principalmente se ele vier de terceiros.
+> [!NOTE]
+> **Verificação de coleta:** além da validação do conteúdo, os testes gerados devem importar o módulo alvo e passar em `pytest --collect-only`. Essa verificação roda em um subprocesso, com limite de 30 s. Ela executa o código de nível superior do módulo alvo e do arquivo gerado, portanto revise o código antes de usar, principalmente se ele vier de terceiros.
 
 ## Pré-requisitos
 
@@ -138,13 +170,19 @@ Use apenas uma fonte de entrada por execução (arquivo, `--snippet` ou entrada 
 
 Opções abreviadas não são aceitas: escreva o nome completo da opção. Por exemplo, `--forc` é rejeitado com código de saída 2 em vez de ser interpretado como `--force`.
 
-Comportamento de sobrescrita:
+**Comportamento de sobrescrita**
 
 - Se `test_<nome>.py` já existir e `--force` não for usado, o Agente pergunta se deve sobrescrever. Somente `s` ou `sim` confirma; qualquer outra resposta cancela e mantém o arquivo atual.
 - Sem terminal interativo (CI, entrada redirecionada ou código vindo da entrada padrão), a falta de confirmação é tratada como recusa: o arquivo existente não é alterado, o Agente informa que `--force` é necessário e encerra com código diferente de zero.
 - A confirmação acontece antes da chamada ao modelo, e o arquivo existente só é substituído depois que o novo conteúdo for validado.
 
-Códigos de saída: `0` sucesso, `1` erro tratado (entrada, configuração, modelo, validação ou saída), `2` erro de uso dos argumentos.
+**Códigos de saída**
+
+| Código | Significado |
+|---|---|
+| `0` | Sucesso |
+| `1` | Erro tratado (entrada, configuração, modelo, validação ou saída) |
+| `2` | Erro de uso dos argumentos |
 
 ## Exemplos de uso
 
@@ -186,11 +224,11 @@ O `pyproject.toml` configura o `pytest` para executar `tests/` (testes do própr
 
 O `requirements.txt` usa faixas de versão (por exemplo `pytest>=9.2.0,<10`), que aceitam atualizações compatíveis dentro da mesma versão principal.
 
-Integração contínua: o workflow `.github/workflows/ci.yml` roda `python -m pytest` a cada push e pull request. O passo "Verificar nomes proibidos" só é executado quando o secret `FORBIDDEN_NAMES` do repositório está configurado (um nome por linha). Sem o secret, esse passo é ignorado.
+**Integração contínua:** o workflow `.github/workflows/ci.yml` roda `python -m pytest` a cada push e pull request. O passo "Verificar nomes proibidos" só é executado quando o secret `FORBIDDEN_NAMES` do repositório está configurado (um nome por linha). Sem o secret, esse passo é ignorado.
 
 ## Estrutura do projeto
 
-```
+```text
 Azure-LangChain/
 ├── pytest_agent/            # Código do Agente
 ├── examples/
@@ -199,6 +237,7 @@ Azure-LangChain/
 │   └── generated_tests/     # Testes gerados e versionados dos exemplos
 ├── tests/                   # Testes do próprio Agente
 ├── scripts/                 # Scripts de apoio
+├── .github/workflows/       # Integração contínua (ci.yml)
 ├── .env.example             # Modelo das variáveis de ambiente
 ├── .gitignore
 ├── pyproject.toml           # Configuração do pytest
@@ -208,8 +247,12 @@ Azure-LangChain/
 
 ## Notas de segurança
 
-- Nunca versione o arquivo `.env` nem qualquer segredo (chaves de API, endpoints com chave, tokens). O `.env` deve estar listado no `.gitignore`, como já está neste repositório. Se uma chave vazar, gere uma nova no portal do Azure.
-- Os testes são gerados por um LLM e podem estar incorretos ou ser inseguros. Revise o código gerado antes de executá-lo, principalmente quando o código de entrada vier de terceiros.
+> [!WARNING]
+> Nunca versione o arquivo `.env` nem qualquer segredo (chaves de API, endpoints com chave, tokens). O `.env` deve estar listado no `.gitignore`, como já está neste repositório. Se uma chave vazar, gere uma nova no portal do Azure.
+
+> [!CAUTION]
+> Os testes são gerados por um LLM e podem estar incorretos ou ser inseguros. Revise o código gerado antes de executá-lo, principalmente quando o código de entrada vier de terceiros.
+
 - O Agente nunca imprime o valor de `AZURE_OPENAI_API_KEY` em saídas, logs ou mensagens de erro.
 
 ## Licença
